@@ -13,12 +13,25 @@ logger = client.logger("buggy-app")
 
 
 def connect_to_database():
-    # Deliberately wrong host/port to simulate a bad DB connection string
+    """
+    Establish a TCP connection to the configured database.
+    Uses sensible defaults (PostgreSQL default port 5432) and raises a
+    clear error if the connection cannot be made.
+    """
     db_host = os.getenv("DB_HOST", "localhost")
-    db_port = int(os.getenv("DB_PORT", "5999"))  # intentionally wrong port
+    # Use the standard PostgreSQL port as the safe default
+    db_port = int(os.getenv("DB_PORT", "5432"))
 
     print(f"Connecting to database at {db_host}:{db_port} ...")
-    sock = socket.create_connection((db_host, db_port), timeout=3)
+    try:
+        sock = socket.create_connection((db_host, db_port), timeout=3)
+    except Exception as conn_err:
+        # Re‑raise with a more descriptive message while preserving the original traceback
+        raise ConnectionError(
+            f"Failed to connect to database at {db_host}:{db_port}. "
+            f"Ensure the service is reachable and the host/port are correct."
+        ) from conn_err
+
     return sock
 
 
