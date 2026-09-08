@@ -27,14 +27,16 @@ def _log_struct(message: str, stack_trace: str):
         print("[CloudLogging disabled] ERROR:", message)
 
 
-def connect_to_database():
+def connect_to_database() -> socket.socket | None:
     """Attempt to open a TCP connection to the configured DB.
 
     Returns:
-        socket.socket: The connected socket.
+        socket.socket | None: The connected socket, or ``None`` if the
+        connection could not be established.
 
-    Raises:
-        ConnectionError: If the connection cannot be established.
+    The function no longer raises an exception; it logs the problem and
+    returns ``None`` so callers can decide how to proceed without the
+    program crashing.
     """
     db_host = os.getenv("DB_HOST", "localhost")
     db_port = int(os.getenv("DB_PORT", "5999"))
@@ -44,14 +46,16 @@ def connect_to_database():
         sock = socket.create_connection((db_host, db_port), timeout=3)
         return sock
     except (socket.timeout, ConnectionRefusedError, OSError) as exc:
-        # Wrap the low‑level socket error in a higher‑level, more descriptive exception.
-        raise ConnectionError(
+        # Log the low‑level error and return None instead of raising.
+        _log_struct(
             f"Unable to connect to database at {db_host}:{db_port}. "
-            f"Ensure the service is running and reachable."
-        ) from exc
+            "Ensure the service is running and reachable.",
+            traceback.format_exc(),
+        )
+        return None
 
 
-def load_api_config():
+def load_api_config() -> str:
     """Load the external API key from the environment.
 
     Returns:
@@ -84,19 +88,18 @@ def main():
     bug_type = sys.argv[1] if len(sys.argv) > 1 else "db"
 
     if bug_type == "db":
-        try:
-            connect_to_database()
+        sock = connect_to_database()
+        if sock:
             print("Connected successfully!")
-        except Exception as e:
-            log_error(e)
-
+            sock.close()
+        else:
+            print("Failed to connect to the database; proceeding without a DB connection.")
     elif bug_type == "api":
         try:
             load_api_config()
             print("API config loaded successfully!")
         except Exception as e:
             log_error(e)
-
     else:
         print(f"Unknown bug type: {bug_type}. Use 'db' or 'api'.")
 
