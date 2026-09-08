@@ -7,35 +7,76 @@ import google.cloud.logging
 
 load_dotenv()
 
-client = google.cloud.logging.Client()
-logger = client.logger("buggy-app")
+# Initialise Cloud Logging client lazily – it may fail in environments without GCP credentials.
+try:
+    client = google.cloud.logging.Client()
+    logger = client.logger("buggy-app")
+except Exception:  # pragma: no cover
+    logger = None  # Fallback to a no‑op logger if Cloud Logging cannot be initialised.
+
+
+def _log_struct(message: str, stack_trace: str):
+    """Helper that logs to Cloud Logging if the logger is available."""
+    if logger:
+        logger.log_struct(
+            {"message": message, "stack_trace": stack_trace},
+            severity="ERROR",
+        )
+    else:
+        # In non‑GCP environments just print the log entry.
+        print("[CloudLogging disabled] ERROR:", message)
+
 
 def connect_to_database():
+    """Attempt to open a TCP connection to the configured DB.
+
+    Returns:
+        socket.socket: The connected socket.
+
+    Raises:
+        ConnectionError: If the connection cannot be established.
+    """
     db_host = os.getenv("DB_HOST", "localhost")
     db_port = int(os.getenv("DB_PORT", "5999"))
     print(f"Connecting to database at {db_host}:{db_port} ...")
-    sock = socket.create_connection((db_host, db_port), timeout=3)
-    return sock
+
+    try:
+        sock = socket.create_connection((db_host, db_port), timeout=3)
+        return sock
+    except (socket.timeout, ConnectionRefusedError, OSError) as exc:
+        # Wrap the low‑level socket error in a higher‑level, more descriptive exception.
+        raise ConnectionError(
+            f"Unable to connect to database at {db_host}:{db_port}. "
+            f"Ensure the service is running and reachable."
+        ) from exc
 
 
 def load_api_config():
-    api_key = os.environ["EXTERNAL_API_KEY"]  # deliberately not set
+    """Load the external API key from the environment.
+
+    Returns:
+        str: The API key.
+
+    Raises:
+        EnvironmentError: If the key is missing.
+    """
+    api_key = os.getenv("EXTERNAL_API_KEY")
+    if not api_key:
+        raise EnvironmentError(
+            "EXTERNAL_API_KEY environment variable is not set. "
+            "Set it before running the application."
+        )
     return api_key
 
 
 def log_error(e: Exception):
+    """Log the full traceback to stdout and Cloud Logging (if configured)."""
     stack_trace = traceback.format_exc()
     print("ERROR OCCURRED:")
     print(stack_trace)
 
-    logger.log_struct(
-        {
-            "message": str(e),
-            "stack_trace": stack_trace,
-        },
-        severity="ERROR",
-    )
-    print("Error logged to Cloud Logging.")
+    _log_struct(str(e), stack_trace)
+    print("Error logged to Cloud Logging (if enabled).")
 
 
 def main():
