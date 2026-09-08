@@ -43,6 +43,7 @@ def load_api_config():
     Returns None if the variable is missing and logs a warning,
     allowing the application to continue or handle the missing key gracefully.
     """
+    # Use getenv to avoid KeyError when the variable is absent
     api_key = os.getenv("EXTERNAL_API_KEY")
     if api_key is None:
         warning_msg = "EXTERNAL_API_KEY is not set; proceeding without an API key."
