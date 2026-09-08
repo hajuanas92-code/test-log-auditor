@@ -60,6 +60,7 @@ def load_api_config():
     Raises:
         EnvironmentError: If the key is missing.
     """
+    # Use getenv to avoid a KeyError if the variable is absent.
     api_key = os.getenv("EXTERNAL_API_KEY")
     if not api_key:
         raise EnvironmentError(
