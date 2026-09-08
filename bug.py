@@ -8,7 +8,9 @@ from google.cloud.logging_v2.resource import Resource
 
 load_dotenv()
 
-# Set up Cloud Logging client (uses GOOGLE_APPLICATION_CREDENTIALS from .env)
+# ----------------------------------------------------------------------
+# Cloud Logging client (uses GOOGLE_APPLICATION_CREDENTIALS from .env)
+# ----------------------------------------------------------------------
 client = google.cloud.logging.Client()
 logger = client.logger("buggy-app")
 
@@ -20,15 +22,20 @@ class ConfigError(RuntimeError):
 def _get_db_config():
     """
     Retrieve DB connection parameters from the environment.
-    Raises ConfigError if mandatory variables are missing.
+    Provides sensible defaults for local development and raises
+    ConfigError only when the values are present but malformed.
     """
-    db_host = os.getenv("DB_HOST")
-    db_port = os.getenv("DB_PORT")
+    # Default to a typical local PostgreSQL instance – adjust as needed.
+    default_host = "127.0.0.1"
+    default_port = 5432
+
+    db_host = os.getenv("DB_HOST", default_host)
+    db_port = os.getenv("DB_PORT", str(default_port))
 
     if not db_host:
-        raise ConfigError("Environment variable DB_HOST is not set.")
+        raise ConfigError("Environment variable DB_HOST is not set and no default is defined.")
     if not db_port:
-        raise ConfigError("Environment variable DB_PORT is not set.")
+        raise ConfigError("Environment variable DB_PORT is not set and no default is defined.")
 
     try:
         db_port = int(db_port)
@@ -41,7 +48,7 @@ def _get_db_config():
 def connect_to_database():
     """
     Establish a TCP connection to the configured database.
-    If the connection cannot be made, a clear exception is raised and logged.
+    Returns the connected socket or raises a detailed ConnectionError.
     """
     db_host, db_port = _get_db_config()
 
@@ -50,12 +57,21 @@ def connect_to_database():
         # Attempt the connection with a short timeout.
         sock = socket.create_connection((db_host, db_port), timeout=5)
         return sock
-    except Exception as conn_err:
-        # Wrap the original exception with a more helpful message.
+    except socket.timeout as exc:
         raise ConnectionError(
-            f"Unable to connect to database at {db_host}:{db_port}. "
-            f"Ensure the service is running and the host/port are correct."
-        ) from conn_err
+            f"Timed out while trying to connect to {db_host}:{db_port}. "
+            "Check network connectivity and firewall rules."
+        ) from exc
+    except ConnectionRefusedError as exc:
+        raise ConnectionError(
+            f"Connection refused by {db_host}:{db_port}. "
+            "Ensure the database service is running and listening on the specified port."
+        ) from exc
+    except OSError as exc:
+        # Catch any other low‑level socket errors.
+        raise ConnectionError(
+            f"Failed to connect to {db_host}:{db_port} due to an OS error: {exc}."
+        ) from exc
 
 
 def main():
