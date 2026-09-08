@@ -59,7 +59,7 @@ def load_api_config():
 
 def main():
     try:
-        #connect_to_database()
+        connect_to_database()
         load_api_config()
         print("Application started successfully!")
     except Exception as e:
