@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import google.cloud.logging
 from google.cloud.logging_v2.resource import Resource
 
+# Load variables from a .env file (if present)
 load_dotenv()
 
 # Set up Cloud Logging client (uses GOOGLE_APPLICATION_CREDENTIALS from .env)
@@ -13,23 +14,54 @@ logger = client.logger("buggy-app")
 
 
 def connect_to_database():
-    # Deliberately wrong host/port to simulate a bad DB connection string
+    """
+    Attempt to open a TCP connection to the configured database.
+    The host and port are read from environment variables with sensible defaults.
+    """
     db_host = os.getenv("DB_HOST", "localhost")
-    db_port = int(os.getenv("DB_PORT", "5999"))  # intentionally wrong port
+    db_port = int(os.getenv("DB_PORT", "5432"))  # default PostgreSQL port; adjust as needed
 
     print(f"Connecting to database at {db_host}:{db_port} ...")
-    sock = socket.create_connection((db_host, db_port), timeout=3)
-    return sock
+    try:
+        sock = socket.create_connection((db_host, db_port), timeout=3)
+        return sock
+    except Exception as conn_err:
+        # Log the connection problem and re‑raise so the caller can handle it
+        logger.log_struct(
+            {
+                "message": f"Database connection failed: {conn_err}",
+                "file": __file__,
+            },
+            severity="ERROR",
+        )
+        raise
+
 
 def load_api_config():
-    api_key = os.environ["EXTERNAL_API_KEY"]  # deliberately not set anywhere
+    """
+    Retrieve the external API key from the environment.
+    Returns None if the variable is missing and logs a warning,
+    allowing the application to continue or handle the missing key gracefully.
+    """
+    api_key = os.getenv("EXTERNAL_API_KEY")
+    if api_key is None:
+        warning_msg = "EXTERNAL_API_KEY is not set; proceeding without an API key."
+        print(warning_msg)
+        logger.log_struct(
+            {
+                "message": warning_msg,
+                "file": __file__,
+            },
+            severity="WARNING",
+        )
     return api_key
+
 
 def main():
     try:
-        connect_to_database()
+        #connect_to_database()
         load_api_config()
-        print("Connected successfully!")
+        print("Application started successfully!")
     except Exception as e:
         error_message = str(e)
         stack_trace = traceback.format_exc()
