@@ -49,13 +49,27 @@ def connect_to_database():
     try:
         # Attempt the connection with a short timeout.
         sock = socket.create_connection((db_host, db_port), timeout=5)
-        return sock
-    except Exception as conn_err:
-        # Wrap the original exception with a more helpful message.
+        # Immediately close the socket – the purpose of this function is only
+        # to verify that the service is reachable.
+        sock.close()
+        return True
+    except ConnectionRefusedError as exc:
+        # The target machine actively refused the connection – most likely the
+        # service is not running or the host/port is wrong.
         raise ConnectionError(
-            f"Unable to connect to database at {db_host}:{db_port}. "
-            f"Ensure the service is running and the host/port are correct."
-        ) from conn_err
+            f"Connection refused when trying to reach {db_host}:{db_port}. "
+            "Verify that the database service is up and the host/port are correct."
+        ) from exc
+    except socket.timeout as exc:
+        raise ConnectionError(
+            f"Timed out after 5 seconds while connecting to {db_host}:{db_port}. "
+            "Check network connectivity and firewall rules."
+        ) from exc
+    except OSError as exc:
+        # Catch any other socket‑related errors (e.g., DNS failure).
+        raise ConnectionError(
+            f"Failed to connect to {db_host}:{db_port}: {exc.strerror}"
+        ) from exc
 
 
 def main():
