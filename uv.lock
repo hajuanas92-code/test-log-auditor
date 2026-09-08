@@ -391,7 +391,7 @@ wheels = [
 [[package]]
 name = "log-auditor"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "google-cloud-logging" },
     { name = "python-dotenv" },

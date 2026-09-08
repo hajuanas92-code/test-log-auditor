@@ -21,10 +21,14 @@ def connect_to_database():
     sock = socket.create_connection((db_host, db_port), timeout=3)
     return sock
 
+def load_api_config():
+    api_key = os.environ["EXTERNAL_API_KEY"]  # deliberately not set anywhere
+    return api_key
 
 def main():
     try:
-        connect_to_database()
+        #connect_to_database()
+        load_api_config()
         print("Connected successfully!")
     except Exception as e:
         error_message = str(e)
